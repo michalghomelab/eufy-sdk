@@ -1,5 +1,5 @@
 import { type Surface } from "./members.js";
-import type { CapabilityModule, CommandContext } from "./types.js";
+import type { AvailabilityContext, CapabilityModule, CommandContext } from "./types.js";
 import type { Command } from "../../core/contracts.js";
 /**
  * The P2P **feature-command ids** this motion capability drives. Capability-owned wire vocabulary
@@ -90,6 +90,8 @@ export declare const MOTION_CMD: {
      * T8124 (each write landed byte-exact + read back: 0x30003 → 0x8 → 0x3000b).
      */
     readonly AI_DETECT_TYPE: 1298;
+    /** Indoor-camera detection-type mask (person=1, pet=2, all-other=4). */
+    readonly INDOOR_MOTION_DETECT_TYPE: 6045;
     /**
      * Notification **snooze** — temporarily silence motion/detection notifications for N seconds. ✅ WIRE
      * CONFIRMED on a T8170 (2026-07-23,
@@ -150,6 +152,8 @@ export declare const MOTION_CMD: {
      */
     readonly SOLO_SENSITIVITY: 6070;
 };
+/** The original indoor pan/tilt family uses the 60xx control/read namespace. */
+declare const isPlainIndoorPanTilt: (ctx: AvailabilityContext) => boolean;
 /**
  * AI detection type bits — the `ai_detect_type` bitmask, decoded on-device and cross-checked against
  * the app. `enabledBase` (0x30000) is the "AI detection on" flag, set on every camera and always OR'd
@@ -240,7 +244,12 @@ export declare const MOTION_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "verified";
-        readonly description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).";
+        readonly readAvailable: (ctx: AvailabilityContext) => boolean;
+        readonly readAliases: readonly [{
+            readonly paramType: 6040;
+            readonly available: typeof isPlainIndoorPanTilt;
+        }];
+        readonly description: string;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
         readonly writeAs: "setDetection";
     };
@@ -277,15 +286,21 @@ export declare const MOTION_MEMBERS: {
         readonly description: string;
     };
     /**
-     * 1298 holds the detailed AI-type BITMASK (live-observed: `0x30000` enabled-base | type bits, e.g. a
-     * T8425 reads `0x3000f`). Cams also report 1299 (`hbAiDetectType`) but that is a separate, simpler
-     * value (1) — NOT this bitmask, so 1298 is the read/write id.
+     * Detection type has two model-specific wires. Most supported cameras use the detailed 1298 bitmask;
+     * the original indoor pan/tilt family uses 6045 with a small 1..7 person/pet/other domain. The latter
+     * is the exact DeviceMotionDetectionTypeIndoorProperty table from eufy-security-client.
      */
     readonly aiDetectType: {
         readonly param: 1298;
         readonly type: "number";
         readonly kind: "bitfield";
         readonly provenance: "verified";
+        readonly readAvailable: (ctx: AvailabilityContext) => boolean;
+        readonly readAliases: readonly [{
+            readonly paramType: 6045;
+            readonly available: typeof isPlainIndoorPanTilt;
+        }];
+        readonly enumValuesFor: (ctx: AvailabilityContext) => Record<number, string> | undefined;
         readonly description: string;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command | undefined;
     };
@@ -359,6 +374,7 @@ export declare const MOTION_MEMBERS: {
         readonly kind: "boolean";
         readonly provenance: "verified";
         readonly description: string;
+        readonly available: (ctx: AvailabilityContext) => boolean;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
     };
     /**
@@ -389,6 +405,7 @@ export declare const MOTION_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "apk";
+        readonly available: (ctx: AvailabilityContext) => boolean;
         readonly description: string;
         readonly requires: readonly [1719];
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
@@ -402,6 +419,7 @@ export declare const MOTION_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "apk";
+        readonly available: (ctx: AvailabilityContext) => boolean;
         readonly coerce: (raw: string | number | boolean) => boolean;
         readonly description: string;
         readonly requires: readonly [2706];
@@ -409,3 +427,4 @@ export declare const MOTION_MEMBERS: {
     };
 };
 export declare const MOTION: CapabilityModule;
+export {};

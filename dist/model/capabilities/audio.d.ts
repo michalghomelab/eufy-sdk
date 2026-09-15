@@ -48,6 +48,8 @@ export declare const AUDIO_CMD: {
      */
     readonly HUB_PROMPT_VOLUME: 1292;
 };
+/** The original indoor pan/tilt family reports audio-recording state under 6012, not 1288. */
+declare const isPlainIndoorPanTilt: (ctx: AvailabilityContext) => boolean;
 /**
  * Bound audio controls — the object returned by `dev.audio()`.
  *
@@ -124,6 +126,12 @@ export declare const AUDIO_MEMBERS: {
         readonly invert: true;
         readonly provenance: "verified";
         readonly available: typeof isCameraCodec;
+        readonly readAvailable: (ctx: AvailabilityContext) => boolean;
+        readonly readAliases: readonly [{
+            readonly paramType: 6012;
+            readonly invert: false;
+            readonly available: typeof isPlainIndoorPanTilt;
+        }];
         readonly description: string;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
     };
@@ -161,3 +169,4 @@ export declare const AUDIO_MEMBERS: {
     };
 };
 export declare const AUDIO: CapabilityModule;
+export {};

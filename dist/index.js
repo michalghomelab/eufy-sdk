@@ -3357,6 +3357,8 @@ var MOTION_CMD = {
    * T8124 (each write landed byte-exact + read back: 0x30003 → 0x8 → 0x3000b).
    */
   AI_DETECT_TYPE: 1298,
+  /** Indoor-camera detection-type mask (person=1, pet=2, all-other=4). */
+  INDOOR_MOTION_DETECT_TYPE: 6045,
   /**
    * Notification **snooze** — temporarily silence motion/detection notifications for N seconds. ✅ WIRE
    * CONFIRMED on a T8170 (2026-07-23,
@@ -3416,6 +3418,16 @@ var MOTION_CMD = {
    * carries a read id and a write id separately.
    */
   SOLO_SENSITIVITY: 6070
+};
+var isPlainIndoorPanTilt = (ctx) => ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
+var INDOOR_MOTION_DETECTION_TYPES = {
+  1: "Person",
+  2: "Pet",
+  3: "Person and Pet",
+  4: "All other motions",
+  5: "Person and all other motions",
+  6: "Pet and all other motions",
+  7: "Person, Pet and all other motions"
 };
 var AiDetectType = {
   /** "AI detection enabled" base — always present in a valid value. */
@@ -3571,7 +3583,9 @@ var MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "verified",
-    description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).",
+    readAvailable: (ctx) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: MOTION_CMD.MOTION_DETECT_ENABLE, available: isPlainIndoorPanTilt }],
+    description: "Motion/PIR detection enabled. Ordinary cameras report 1011; the original indoor pan/tilt family reports 6040 (eufy-security-client DeviceMotionDetectionIndoorSoloFloodProperty).",
     write: (v, ctx) => {
       requireFamily("motionDetection", ctx, "camera");
       if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
@@ -3619,21 +3633,29 @@ var MOTION_MEMBERS = {
     description: "Motion sensitivity, raw wire value (1-indexed; the app's own picker UI is 0-indexed \u2014 see MOTION_CMD.MOTION_SENSITIVITY). \u2705 Write wire-confirmed live on T8170 (observed 1 and 7)."
   },
   /**
-   * 1298 holds the detailed AI-type BITMASK (live-observed: `0x30000` enabled-base | type bits, e.g. a
-   * T8425 reads `0x3000f`). Cams also report 1299 (`hbAiDetectType`) but that is a separate, simpler
-   * value (1) — NOT this bitmask, so 1298 is the read/write id.
+   * Detection type has two model-specific wires. Most supported cameras use the detailed 1298 bitmask;
+   * the original indoor pan/tilt family uses 6045 with a small 1..7 person/pet/other domain. The latter
+   * is the exact DeviceMotionDetectionTypeIndoorProperty table from eufy-security-client.
    */
   aiDetectType: {
     param: MOTION_CMD.AI_DETECT_TYPE,
     type: "number",
     kind: "bitfield",
     provenance: "verified",
-    description: "AI detection type bitmask \u2014 which classes trigger detection. \u2705 Bits decoded live + confirmed vs the app: 0x30000 = enabled base, bit0 = human recognition, bit1 = human detection, bit2 = vehicle, bit3 = pet (see AiDetectType / encodeAiDetectType). \u2705 WRITE HW-verified live on T8124 (1350 SET_PAYLOAD, {ai_detect_type, channel}): each write landed byte-exact + read back (0x30003 \u2192 0x8 \u2192 0x3000b).",
+    readAvailable: (ctx) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: MOTION_CMD.INDOOR_MOTION_DETECT_TYPE, available: isPlainIndoorPanTilt }],
+    enumValuesFor: (ctx) => isPlainIndoorPanTilt(ctx) ? INDOOR_MOTION_DETECTION_TYPES : void 0,
+    description: "Which classes trigger detection. Original indoor pan/tilt: 6045 enum/mask (person=1, pet=2, other motion=4). Other cameras: 1298 detailed AI bitmask (face=1, human=2, vehicle=4, pet=8, enabled base 0x30000).",
     write: (v, ctx) => {
       requireFamily("aiDetectType", ctx, "camera");
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0)
         return void 0;
+      if (isPlainIndoorPanTilt(ctx)) {
+        if (n < 1 || n > 7)
+          return void 0;
+        return setJson(MOTION_CMD.INDOOR_MOTION_DETECT_TYPE, { type: n }, ctx);
+      }
       return setPayload(MOTION_CMD.AI_DETECT_TYPE, { ai_detect_type: n, channel: ctx.channel }, ctx, 0, 0);
     }
   },
@@ -3707,6 +3729,10 @@ var MOTION_MEMBERS = {
     kind: "boolean",
     provenance: "verified",
     description: "Whether a standalone motion sensor is in the app's user test mode \u2014 the only state in which it reports detections over P2P. \u2705 Observed live on a T8910 both ways. P2P-only: the cloud record never carries this id, so it is present once the station has reported it and absent before that.",
+    // A camera may have the broad `motion` capability, but this setting belongs exclusively to a
+    // standalone PIR sensor. Gate the manifest as well as the command so HA never creates a dead
+    // "Test mode" switch for cameras such as T8410.
+    available: (ctx) => ctx.codec === "sensor",
     write: (v, ctx) => {
       requireFamily("setTestMode", ctx, "sensor");
       return asBool(v) ? setPayload(MOTION_CMD.SENSOR_ENTER_TEST_MODE, { channel: ctx.channel }, ctx) : setScalar(MOTION_CMD.SENSOR_EXIT_TEST_MODE, EXIT_TEST_MODE_VALUE, ctx, "direct-binary");
@@ -3743,6 +3769,7 @@ var MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx) => !isPlainIndoorPanTilt(ctx),
     description: "Restrict AI classification to night-time only (1719). \u26A0\uFE0F Replay + readback confirmed on a HomeBase-attached T8425, not byte-captured.",
     requires: [MOTION_CMD.HUMAN_ONLY_AT_NIGHT],
     write: (v, ctx) => {
@@ -3759,6 +3786,7 @@ var MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx) => !isPlainIndoorPanTilt(ctx),
     coerce: (raw) => decodeRadarWdSwitch(raw) ?? false,
     description: "Loitering detection \u2014 alert on lingering rather than passing (2706). Observed on the T8214 doorbell only; the read is object-OR-scalar, matching the app's own decode.",
     requires: [MOTION_CMD.LOITERING_DETECTION],
@@ -4493,6 +4521,7 @@ var AUDIO_CMD = {
    */
   HUB_PROMPT_VOLUME: 1292
 };
+var isPlainIndoorPanTilt2 = (ctx) => ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
 function audioCommand(param, value, ctx) {
   return setScalar(param, value, ctx, "direct-binary");
 }
@@ -4551,7 +4580,9 @@ var AUDIO_MEMBERS = {
     invert: true,
     provenance: "verified",
     available: isCameraCodec,
-    description: "Record audio with video (1288 record_mute, inverted). \u2705 HW-verified on T8425: readback flips (on\u21921288=0, off\u21921288=1). The write is a 1350 SET_PAYLOAD on the device channel with `{channel, record_mute}` \u2014 the key is record_mute and it is INVERTED.",
+    readAvailable: (ctx) => !isPlainIndoorPanTilt2(ctx),
+    readAliases: [{ paramType: AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT, invert: false, available: isPlainIndoorPanTilt2 }],
+    description: "Record audio with video. Ordinary cameras use inverted 1288 record_mute; the original indoor pan/tilt family uses direct 6012 (eufy-security-client DeviceAudioRecordingIndoorSoloFloodlightProperty).",
     write: (v, ctx) => {
       if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
         return setJson(AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT, { enable: asBool(v) ? 1 : 0, index: 0, status: 0, type: 0, value: 0, voiceID: 0, zonecount: 0 }, ctx);
@@ -4723,6 +4754,10 @@ var CAMERA_CMD = {
    * 2731 but 1705, on a domain of its own (5 = Auto, 6/7/8 = Low/Medium/High, all four observed).
    */
   RECORDING_QUALITY_SET: 2731,
+  /** Cloud property carrying the active recording tier on the original indoor pan/tilt family. */
+  RECORDING_QUALITY_INDOOR_PT_READ: 2034,
+  /** 1700 control-payload command used to set recording quality on that family. */
+  RECORDING_QUALITY_INDOOR_PT_SET: 1023,
   /**
    * LIVE-VIEW quality — a separate setting from {@link CAMERA_CMD.RECORDING_QUALITY_SET}, and the app's
    * names for the two invert what they suggest: 2730 is `multicamSetVideoQuailty` and drives the
@@ -4776,6 +4811,7 @@ var NightVision = {
   /** Full colour night vision, forced on even in the dark (models with a spotlight/starlight sensor). */
   FullColor: 2
 };
+var isPlainIndoorPanTilt3 = (ctx) => ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
 var RecordingQuality = {
   HD720: "HD (720P)",
   FullHD1080: "Full HD (1080P)",
@@ -5020,6 +5056,9 @@ var CAMERA_MEMBERS = {
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
     provenance: "verified",
     description: 'Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. \u2705 wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. Enum labels are best-guess. Some models omit full colour. Tried `form: "auto"` on a standalone T8410 (2026-09-15): the frame goes out over level 1 clean, no error \u2014 and the app doesn\'t move. Unlike motionDetection/audioRecording (a WRONG command entirely for this family, fixed by swapping to the 1700-wrapper one eufy-security-client actually uses), this command IS correct \u2014 level 2 is what it genuinely needs, and a standalone camera never gets that key. Left level-2- only (no `form`) on purpose: an honest bounded-~8s failure beats a silent no-op that looks like it worked. No 1700-wrapper alternative exists in eufy-security-client for this property.',
+    // T8410/kin never had this property in eufy-security-client's per-model manifest. Publishing it
+    // there creates a dead three-state HA select beside the one control that family actually exposes.
+    available: (ctx) => !isPlainIndoorPanTilt3(ctx),
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
       return nv == null ? void 0 : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
@@ -5038,6 +5077,7 @@ var CAMERA_MEMBERS = {
     kind: "boolean",
     provenance: "verified",
     description: `IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) \u2014 the app's "Auto" night-vision mode.`,
+    available: isPlainIndoorPanTilt3,
     write: (v, ctx) => {
       if (ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA && ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA_1080) {
         throw new Error(`camera: autoNightVision write wire is only known for the plain indoor pan-tilt family [${describeDevice(ctx)}]`);
@@ -5078,6 +5118,8 @@ var CAMERA_MEMBERS = {
     param: CAMERA_CMD.RECORDING_QUALITY_SET,
     type: "string",
     provenance: "verified",
+    readAvailable: (ctx) => !isPlainIndoorPanTilt3(ctx),
+    readAliases: [{ paramType: CAMERA_CMD.RECORDING_QUALITY_INDOOR_PT_READ, available: isPlainIndoorPanTilt3 }],
     decode: (raw) => decodeRecordingQualityTier(raw),
     decodedKind: "enum",
     decodedValues: Object.keys(RECORDING_QUALITY_TIERS).map(Number),
@@ -5090,7 +5132,12 @@ var CAMERA_MEMBERS = {
     ...accepts(),
     write: (v, ctx) => {
       const q = resolveRecordingQualityTier(v);
-      return q == null ? void 0 : setPayload(CAMERA_CMD.RECORDING_QUALITY_SET, { channel: 0, mode: 0, primary_view: 0, quality: q }, ctx, 0);
+      if (q == null)
+        return void 0;
+      if (isPlainIndoorPanTilt3(ctx)) {
+        return setJson(CAMERA_CMD.RECORDING_QUALITY_INDOOR_PT_SET, { quality: q }, ctx);
+      }
+      return setPayload(CAMERA_CMD.RECORDING_QUALITY_SET, { channel: 0, mode: 0, primary_view: 0, quality: q }, ctx, 0);
     }
   },
   /**
@@ -5102,6 +5149,7 @@ var CAMERA_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx) => !isPlainIndoorPanTilt3(ctx),
     description: "Anti-theft detection on/off (1015 APP_CMD_EAS_SWITCH; the app parses it as anti_theft_detection_switch). Adaptive scalar {value:0|1}. \u26A0\uFE0F Replay+readback confirmed on a HomeBase-attached T8425 only; standalone unverified and v3 devices use id 2735 \u2014 see CAMERA_CMD.EAS_SWITCH.",
     requires: [CAMERA_CMD.EAS_SWITCH],
     write: (v, ctx) => setScalar(CAMERA_CMD.EAS_SWITCH, asBool(v) ? 1 : 0, ctx, "auto")

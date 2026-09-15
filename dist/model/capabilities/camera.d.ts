@@ -1,5 +1,5 @@
 import { type Surface } from "./members.js";
-import type { CapabilityModule, CommandContext } from "./types.js";
+import type { AvailabilityContext, CapabilityModule, CommandContext } from "./types.js";
 import { type Command, type MediaProvider } from "../../core/contracts.js";
 /**
  * The P2P **feature-command ids** this camera capability drives (direct-binary switches + `1350`
@@ -122,6 +122,10 @@ export declare const CAMERA_CMD: {
      * 2731 but 1705, on a domain of its own (5 = Auto, 6/7/8 = Low/Medium/High, all four observed).
      */
     readonly RECORDING_QUALITY_SET: 2731;
+    /** Cloud property carrying the active recording tier on the original indoor pan/tilt family. */
+    readonly RECORDING_QUALITY_INDOOR_PT_READ: 2034;
+    /** 1700 control-payload command used to set recording quality on that family. */
+    readonly RECORDING_QUALITY_INDOOR_PT_SET: 1023;
     /**
      * LIVE-VIEW quality — a separate setting from {@link CAMERA_CMD.RECORDING_QUALITY_SET}, and the app's
      * names for the two invert what they suggest: 2730 is `multicamSetVideoQuailty` and drives the
@@ -194,6 +198,12 @@ export declare const NightVision: {
 };
 /** A night-vision mode — the value side of {@link NightVision}. */
 export type NightVisionValue = (typeof NightVision)[keyof typeof NightVision];
+/**
+ * The original indoor pan/tilt family exposes only CMD_IRCUT_SWITCH (1013) as its night-vision
+ * control. eufy-security-client has kept that exact model table from 1.6.6 through 4.1.0: device
+ * types 31/35 get DeviceAutoNightvision, never the separate three-state DeviceNightvision property.
+ */
+declare const isPlainIndoorPanTilt: (ctx: AvailabilityContext) => boolean;
 /**
  * Video record-quality names. The stored value is a quality TIER; the two lower tiers are the same
  * resolution on every camera confirmed so far, and the top tier is whatever the camera's sensor gives —
@@ -442,6 +452,7 @@ export declare const CAMERA_MEMBERS: {
         };
         readonly provenance: "verified";
         readonly description: string;
+        readonly available: (ctx: AvailabilityContext) => boolean;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command | undefined;
     };
     /**
@@ -456,7 +467,8 @@ export declare const CAMERA_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "verified";
-        readonly description: "IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) — the app's \"Auto\" night-vision mode.";
+        readonly description: 'IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) — the app\'s "Auto" night-vision mode.';
+        readonly available: typeof isPlainIndoorPanTilt;
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
     };
     /**
@@ -493,6 +505,11 @@ export declare const CAMERA_MEMBERS: {
         readonly param: 2731;
         readonly type: "string";
         readonly provenance: "verified";
+        readonly readAvailable: (ctx: AvailabilityContext) => boolean;
+        readonly readAliases: readonly [{
+            readonly paramType: 2034;
+            readonly available: typeof isPlainIndoorPanTilt;
+        }];
         readonly decode: (raw: unknown) => number | undefined;
         readonly decodedKind: "enum";
         readonly decodedValues: number[];
@@ -514,6 +531,7 @@ export declare const CAMERA_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "apk";
+        readonly available: (ctx: AvailabilityContext) => boolean;
         readonly description: string;
         readonly requires: readonly [1015];
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
@@ -544,10 +562,10 @@ export declare const CAMERA_MEMBERS: {
         readonly type: "bool";
         readonly kind: "boolean";
         readonly provenance: "verified";
-        readonly readAvailable: (ctx: import("./types.js").AvailabilityContext) => boolean;
+        readonly readAvailable: (ctx: AvailabilityContext) => boolean;
         readonly readAliases: readonly [{
             readonly paramType: 1716;
-            readonly available: (ctx: import("./types.js").AvailabilityContext) => boolean;
+            readonly available: (ctx: AvailabilityContext) => boolean;
         }];
         readonly requiresRead: true;
         readonly description: "Camera status LED. Video doorbells report the same state under their button-ring LED parameter.";
@@ -594,3 +612,4 @@ export declare const CAMERA_MEMBERS: {
     readonly talkback: import("./members.js").ProvidedMember<"media", false | ((opts?: Parameters<NonNullable<MediaProvider["talkback"]>>[0]) => Promise<import("../../core/contracts.js").TalkbackHandle>) | undefined>;
 };
 export declare const CAMERA: CapabilityModule;
+export {};
