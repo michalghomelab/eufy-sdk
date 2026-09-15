@@ -75,7 +75,7 @@ import {
   type RawParams,
 } from "../model/index.js";
 import { isHomeBase } from "../model/device-family.js";
-import { DeviceRegistry, type ParamChange } from "./device-registry.js";
+import { DeviceRegistry, type DeviceRecord, type ParamChange } from "./device-registry.js";
 import type {
   EufyMegaOptions,
   EufyMegaEvent,
@@ -1241,7 +1241,9 @@ export class EufyMega extends EventEmitter {
     const dev = Device.fromRecord(sn, rec, this.opts.logger);
     if (rec.dpParams) dev.applyParams(rec.dpParams);
     this.liveDevices.set(sn, new WeakRef(dev));
-    const ctx = await this.commandContext(sn);
+    // `record()` is the expensive, live per-device overlay. Reuse the exact snapshot that built the
+    // model instead of fetching it again while binding its command context.
+    const ctx = await this.commandContext(sn, rec);
     dev.bindActions(
       ctx,
       this.commandSinkFor(sn),
@@ -2000,8 +2002,8 @@ export class EufyMega extends EventEmitter {
     }
   }
 
-  private async commandContext(sn: string): Promise<CommandContext> {
-    const rec = await this.registry.record(sn);
+  private async commandContext(sn: string, snapshot?: DeviceRecord): Promise<CommandContext> {
+    const rec = snapshot ?? (await this.registry.record(sn));
     // Resolve the record synchronously from the registry (already loaded by `record()`) — the same
     // single lookup the command sink uses, and it never opens a transport just to read a record.
     const dev = this.registry.require(sn);
