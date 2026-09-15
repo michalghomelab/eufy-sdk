@@ -168,11 +168,17 @@ export type SoundDetectionTypeValue = (typeof SoundDetectionType)[keyof typeof S
  * omit `FullColor`.
  */
 export declare const NightVision: {
-    /** Off — never use infrared. */
+    /** Off — never switch to night vision, stays in normal colour regardless of light. */
     readonly Off: 0;
-    /** Infrared / "B&W Auto" — black-and-white night vision. */
-    readonly Infrared: 1;
-    /** Full colour night vision (models with a spotlight / starlight sensor). */
+    /**
+     * Auto — the camera switches to black-and-white IR by itself as it gets dark, and back to
+     * colour in daylight. Old eufy client source names this raw state "B&W Night Vision"; the
+     * current app UI calls the same mode "Auto" (confirmed against the app directly, 2026-09-15 —
+     * this is the automatic-switching one, not a distinct fourth mode). `Infrared` kept as an
+     * alias since some call sites and this file's own history use that name for the same value.
+     */
+    readonly Auto: 1;
+    /** Full colour night vision, forced on even in the dark (models with a spotlight/starlight sensor). */
     readonly FullColor: 2;
 };
 /** A night-vision mode — the value side of {@link NightVision}. */

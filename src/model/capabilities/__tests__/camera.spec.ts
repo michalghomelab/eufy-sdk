@@ -278,7 +278,7 @@ describe("camera capability module", () => {
 
     it("nightVision → 1350 set-payload, mChannel 0, {channel,night_sion} (verified)", () => {
       // Verified live: device channel goes INSIDE the payload; the envelope's mChannel is 0.
-      expect(NightVision).toEqual({ Off: 0, Infrared: 1, FullColor: 2 });
+      expect(NightVision).toEqual({ Off: 0, Auto: 1, FullColor: 2 });
       expect(buildCommand("nightVision", NightVision.FullColor, ctx(3))).toMatchObject({
         kind: "set-payload",
         cmd: CAMERA_CMD.NIGHT_VISION_TYPE,
