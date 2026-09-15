@@ -19856,6 +19856,12 @@ var P2PCommandRouter = class _P2PCommandRouter {
       const required = opts.waitLevel2 !== "soft" || opts.requireLevel2ForAttached === true && homeBaseAttached;
       if (!required)
         return { session, parentSn, channel, accountId, homeBaseAttached };
+      if (!homeBaseAttached) {
+        const ready2 = await abortable(session.awaitLevel2Key(LEVEL2_SETTLE_MS, "session"), opts.signal);
+        if (!ready2)
+          throw new Error(`level-2 key not ready for ${parentSn} (own-session device, no HomeBase)`);
+        return { session, parentSn, channel, accountId, homeBaseAttached };
+      }
       let ready = await abortable(session.awaitLevel2Key(LEVEL2_GRACE_MS, "call"), opts.signal);
       if (!ready && session.repromptLevel2Key()) {
         ready = await abortable(session.awaitLevel2Key(LEVEL2_GRACE_MS, "call"), opts.signal);

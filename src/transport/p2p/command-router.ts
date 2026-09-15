@@ -1268,6 +1268,18 @@ export class P2PCommandRouter {
       }
       const required = opts.waitLevel2 !== "soft" || (opts.requireLevel2ForAttached === true && homeBaseAttached);
       if (!required) return { session, parentSn, channel, accountId, homeBaseAttached };
+      if (!homeBaseAttached) {
+        // An own-session device is not guaranteed a level-2 key at all — the same premise `"settle"`
+        // already answers on with an 8s budget. Give a hard-required call that same shorter budget
+        // instead of the full call grace plus its reprompt: together those can hold this session's
+        // whole command queue for up to 50s waiting on a key an own-session device may simply never be
+        // offered, and every other pending read or write on the same session stalls behind it. A real
+        // chance stays (the key can still land inside 8s, same as it would for a `"settle"` caller) —
+        // this only removes the part of the wait an own-session device cannot possibly reward.
+        const ready = await abortable(session.awaitLevel2Key(LEVEL2_SETTLE_MS, "session"), opts.signal);
+        if (!ready) throw new Error(`level-2 key not ready for ${parentSn} (own-session device, no HomeBase)`);
+        return { session, parentSn, channel, accountId, homeBaseAttached };
+      }
       let ready = await abortable(session.awaitLevel2Key(LEVEL2_GRACE_MS, "call"), opts.signal);
       if (!ready && session.repromptLevel2Key()) {
         ready = await abortable(session.awaitLevel2Key(LEVEL2_GRACE_MS, "call"), opts.signal);
