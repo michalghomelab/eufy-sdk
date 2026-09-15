@@ -114,32 +114,27 @@ describe("motion capability module", () => {
   });
 
   describe("motionDetection buildCommand", () => {
-    it("emits the 1011 scalar (on=1/off=0), form auto — UNDER TEST, see motion.ts's doc", () => {
-      // Was "direct-binary" (level-2/GCM only): hard-stalled an own-session camera's whole session
-      // waiting on a key it never gets, and level-2 was never itself hardware-confirmed for this
-      // param — only the param id (1011 = CAMERA_PIR) carries `provenance: "verified"`. "auto" lets
-      // a standalone session send this on level 1, the wire every other working switch on such a
-      // camera already uses. Revert to "direct-binary" if a HomeBase-attached camera needs it.
+    it("emits the direct-binary 1011 scalar (on=1/off=0) — the capture-verified watermark-class wire", () => {
       expect(intent("motionDetection", true, ctx([], 3))).toEqual({
         kind: "set-param",
         param: MOTION_CMD.CAMERA_PIR, // 1011
         value: 1,
-        form: "auto",
+        form: "direct-binary",
         channel: 3,
       });
       expect(intent("motionDetection", false, ctx([], 3))).toMatchObject({
-        form: "auto",
+        form: "direct-binary",
         value: 0,
       });
     });
-    it("actions.setDetection dispatches the same 1011 scalar, form auto", async () => {
+    it("actions.setDetection dispatches the same direct-binary 1011 scalar", async () => {
       const sent: any[] = [];
       const acts = bindMotion(ctx([], 3), sent);
       await acts.setDetection(true);
       expect(sent[0]).toMatchObject({
         kind: "set-param",
         param: MOTION_CMD.CAMERA_PIR,
-        form: "auto",
+        form: "direct-binary",
         value: 1,
       });
     });
