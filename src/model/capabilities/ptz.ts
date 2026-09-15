@@ -1,5 +1,5 @@
 import { DeviceType } from "../device-types.js";
-import { setJson, setPayload } from "./access.js";
+import { setJson, setJsonBare, setPayload } from "./access.js";
 import { method, propertiesOf, type Members, type Surface } from "./members.js";
 import type { CapabilityModule, InboundSignal, CapabilityEvent, CommandContext } from "./types.js";
 import type { Command } from "../../core/contracts.js";
@@ -47,6 +47,10 @@ export const PTZ_CMD = {
    * inside the smart lock's `601x` block, so the shared param dictionary labels it `lockParam` — an id
    * reused across product lines, and the camera's meaning is the observed one. */
   PTZ_ROTATE_SPEED: 6015,
+  /** Re-centre the pan/tilt mechanism. App `CMD_INDOOR_PAN_CALIBRATION`: 1700 wrapper carrying
+   * `{commandType:6017}` and NOTHING else — no `data` key. The S350 and floodlight variants send a
+   * populated `data`, but a plain indoor pan-tilt (T8410 and kin) takes the bare frame. */
+  PTZ_CALIBRATE: 6017,
 } as const;
 
 /**
@@ -222,6 +226,20 @@ export function zoomCommand(dstZoom: number, ctx: CommandContext, region?: ZoomR
  * a 1700-wrapper sub-command `COMMAND_INDOOR_SPAN_CRUISE_POINT` with `{settingstate:0, value:<id>}`
  * (the app follows it with a query + thumbnail fetch; the move itself is this frame).
  */
+/**
+ * Pan/tilt calibration as a transport-neutral {@link Command}. Sweeps the mechanism to its stops and
+ * re-centres it — the fix for a camera whose preset positions have drifted.
+ *
+ * Bare on purpose: the frame is `{commandType:6017}` under the `1700` wrapper with no `data` key,
+ * which is what eufy-security-client sends for a plain indoor pan-tilt. Its S350 / T8425 branch sends
+ * a populated `data` instead, so if a future model rejects this, that is the variant to try.
+ *
+ * Fire-and-forget, like every PTZ move: P2P carries no ack, and the sweep takes a few seconds.
+ */
+export function calibrateCommand(ctx: CommandContext): Command {
+  return setJsonBare(PTZ_CMD.PTZ_CALIBRATE, ctx);
+}
+
 export function gotoPresetCommand(id: number, ctx: CommandContext): Command {
   return setJson(PTZ_CMD.PTZ_PRESET_GOTO, { settingstate: 0, value: id }, ctx);
 }
@@ -396,6 +414,13 @@ export const PTZ_MEMBERS = {
       (): Promise<void> =>
         sink.dispatch(rotateCommand("down", ctx)),
     "Rotate down.",
+  ),
+  /** Re-centre the pan/tilt mechanism (a few seconds of sweeping). */
+  calibrate: method(
+    ({ ctx, sink }) =>
+      (): Promise<void> =>
+        sink.dispatch(calibrateCommand(ctx)),
+    "Calibrate the pan/tilt mechanism.",
   ),
 
   /**

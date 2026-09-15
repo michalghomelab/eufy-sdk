@@ -299,7 +299,9 @@ const COMMAND_OBSERVATION = Symbol("command-observation");
  */
 export type Command =
   | { kind: "set-param"; param: number; value: number; form: ScalarForm; channel: number }
-  | { kind: "set-json"; param: number; data: Record<string, unknown>; channel: number }
+  // `data` is optional: omitting it serialises to `{"commandType":param}` with no `data` key at
+  // all, which is a different frame from `data:{}` — some controls are only accepted bare.
+  | { kind: "set-json"; param: number; data?: Record<string, unknown>; channel: number }
   // `set-json-raw` differs from `set-json` in ONE way: the wire's outer P2P command IS `cmd` itself
   // (no `1700` CONTROL_PAYLOAD wrapper, no `{commandType,data}` nesting) — the plaintext is exactly
   // `data` (plus an injected `account_id`), matching the app's own SET_SNOOZE_TIME (1271) frame.
