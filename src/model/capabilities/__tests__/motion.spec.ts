@@ -8,6 +8,7 @@ import {
 } from "../motion.js";
 import type { MotionActions } from "../motion.js";
 
+import { DeviceType } from "../../device-types.js";
 import type { CommandContext } from "../types.js";
 import type { Command } from "../../../core/contracts.js";
 import { buildActions, buildCommand } from "../index.js";
@@ -110,6 +111,40 @@ describe("motion capability module", () => {
       // would be truthy-nonempty and wrong. The decode reads the field.
       expect(decodeRadarWdSwitch('{"radar_wd_switch":1,"other":9}')).toBe(true);
       expect(decodeRadarWdSwitch('{"radar_wd_switch":0}')).toBe(false);
+    });
+  });
+
+  describe("motionDetection buildCommand — plain indoor pan-tilt (T8410/kin)", () => {
+    // CAMERA_PIR is silently ignored on this family (confirmed live, 2026-09-15) — it takes
+    // MOTION_DETECT_ENABLE (6040) through the 1700 wrapper instead, per eufy-security-client's own
+    // device-type branch for exactly this family.
+    const ptCtx = (deviceType: number): CommandContext => ({ ...ctx([], 3), deviceType });
+
+    it("emits a set-json 6040 frame, not the scalar CAMERA_PIR one", () => {
+      expect(intent("motionDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA))).toEqual({
+        kind: "set-json",
+        param: MOTION_CMD.MOTION_DETECT_ENABLE,
+        data: { enable: 0, index: 0, status: 1, type: 0, value: 0, voiceID: 0, zonecount: 0 },
+        channel: 3,
+      });
+      expect(intent("motionDetection", false, ptCtx(DeviceType.INDOOR_PT_CAMERA))).toMatchObject({
+        data: { status: 0 },
+      });
+    });
+
+    it("also takes the 1080p sibling deviceType", () => {
+      expect(intent("motionDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA_1080))).toMatchObject({
+        kind: "set-json",
+        param: MOTION_CMD.MOTION_DETECT_ENABLE,
+      });
+    });
+
+    it("leaves the S350 variant on the unchanged CAMERA_PIR path", () => {
+      expect(intent("motionDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA_S350))).toMatchObject({
+        kind: "set-param",
+        param: MOTION_CMD.CAMERA_PIR,
+        form: "direct-binary",
+      });
     });
   });
 

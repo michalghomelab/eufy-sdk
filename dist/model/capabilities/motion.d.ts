@@ -14,6 +14,16 @@ export declare const MOTION_CMD: {
      */
     readonly CAMERA_PIR: 1011;
     /**
+     * Motion detect on-off for the plain indoor pan-tilt family (T8410/T8400-class, vendor deviceType
+     * 31/35 — NOT the S350 variant, 104). eufy-security-client's own device-type branch for exactly
+     * this family (`isIndoorCamera() && !isIndoorPanAndTiltCameraS350()`) sends this id through the
+     * 1700 control-payload wrapper instead of CAMERA_PIR — a different command entirely, not just a
+     * different level. CAMERA_PIR above is what this file's own doc names as verified: captured on a
+     * T8425, a different family; applying it to a T8410 was never itself confirmed and (tested live,
+     * 2026-09-15) the camera silently drops it.
+     */
+    readonly MOTION_DETECT_ENABLE: 6040;
+    /**
      * Motion sensitivity (app `SET_MOTION_DETECTION_SENSITIVITY_DOORBELL`, despite the name NOT
      * doorbell-specific — see below). ✅ Wire captured live on a T8170 ( 2026-07-23,
      * confirmed exchange), moving the sensitivity slider twice: `1350`

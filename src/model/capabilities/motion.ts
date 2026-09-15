@@ -27,6 +27,16 @@ export const MOTION_CMD = {
    */
   CAMERA_PIR: 1011,
   /**
+   * Motion detect on-off for the plain indoor pan-tilt family (T8410/T8400-class, vendor deviceType
+   * 31/35 — NOT the S350 variant, 104). eufy-security-client's own device-type branch for exactly
+   * this family (`isIndoorCamera() && !isIndoorPanAndTiltCameraS350()`) sends this id through the
+   * 1700 control-payload wrapper instead of CAMERA_PIR — a different command entirely, not just a
+   * different level. CAMERA_PIR above is what this file's own doc names as verified: captured on a
+   * T8425, a different family; applying it to a T8410 was never itself confirmed and (tested live,
+   * 2026-09-15) the camera silently drops it.
+   */
+  MOTION_DETECT_ENABLE: 6040,
+  /**
    * Motion sensitivity (app `SET_MOTION_DETECTION_SENSITIVITY_DOORBELL`, despite the name NOT
    * doorbell-specific — see below). ✅ Wire captured live on a T8170 ( 2026-07-23,
    * confirmed exchange), moving the sensitivity slider twice: `1350`
@@ -472,6 +482,16 @@ export const MOTION_MEMBERS = {
     description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).",
     write: (v, ctx) => {
       requireFamily("motionDetection", ctx, "camera");
+      // Plain indoor pan-tilt takes a structured 1700-wrapper frame, not the CAMERA_PIR scalar — see
+      // MOTION_DETECT_ENABLE's doc. The payload shape (all-zero siblings, `status` the only live
+      // field) is eufy-security-client's own for this exact branch, unchanged.
+      if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
+        return setJson(
+          MOTION_CMD.MOTION_DETECT_ENABLE,
+          { enable: 0, index: 0, status: asBool(v) ? 1 : 0, type: 0, value: 0, voiceID: 0, zonecount: 0 },
+          ctx,
+        );
+      }
       return setScalar(MOTION_CMD.CAMERA_PIR, asBool(v) ? 1 : 0, ctx, "direct-binary");
     },
     writeAs: "setDetection",
