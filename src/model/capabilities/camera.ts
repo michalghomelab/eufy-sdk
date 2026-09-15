@@ -31,9 +31,11 @@ export const CAMERA_CMD = {
    */
   ROTATE_IMAGE: 1207,
   /**
-   * On-screen watermark / OSD overlay (app `CMD_SET_DEVS_OSD`). ✅ Wire verified live on T8425 (ch3):
-   * a **3-value enum**, not a bool — 0 = off, 1 = timestamp, 2 = timestamp + logo. Direct-binary
-   * `[channel][value]`. (Labels/enum in {@link Watermark}.)
+   * On-screen watermark / OSD overlay (app `CMD_SET_DEVS_OSD`). A **3-value enum**, not a bool.
+   * ✅ Wire verified live on T8425 (ch3): 0 = off, 1 = timestamp, 2 = timestamp + logo.
+   * ✅ T8410 uses the same raw values with different meanings: 0 = timestamp, 1 = timestamp + logo,
+   * 2 = off. Direct-binary `[channel][value]`; the property manifest publishes the model-specific
+   * labels. (Default/T8425 labels and enum in {@link Watermark}.)
    */
   SET_DEVS_OSD: 1214,
   /**
@@ -175,6 +177,12 @@ export const Watermark = {
 } as const;
 /** A watermark option — the value side of {@link Watermark}. */
 export type WatermarkValue = (typeof Watermark)[keyof typeof Watermark];
+
+const T8410_WATERMARK_LABELS = {
+  0: "Timestamp",
+  1: "Timestamp + Logo",
+  2: "Off",
+};
 
 // Deliberately NOT JSDoc: `NotificationStyle` is re-exported publicly, and TypeDoc publishes a JSDoc
 // block verbatim — the publication guard rejects wire detail on the generated page. The wire itself is
@@ -572,10 +580,12 @@ export const CAMERA_MEMBERS = {
     type: "enum",
     kind: "enum",
     enumValues: { 0: "Off", 1: "Timestamp", 2: "Timestamp + Logo" },
+    enumValuesFor: (ctx: AvailabilityContext) =>
+      ctx.model?.toUpperCase() === "T8410" ? T8410_WATERMARK_LABELS : undefined,
     provenance: "verified",
     description:
-      "On-screen watermark/OSD overlay (CMD_SET_DEVS_OSD 1214). ✅ wire verified live (T8425 ch3): " +
-      "direct-binary [ch][value 0/1/2] — a 3-value enum, not a bool. Enum labels are best-guess.",
+      "On-screen watermark/OSD overlay (CMD_SET_DEVS_OSD 1214). ✅ wire verified live: " +
+      "direct-binary [ch][value 0/1/2], with a model-specific T8410 label order.",
     write: (v, ctx) => {
       const w = coerceEnumValue(Watermark, v);
       return w == null ? undefined : setScalar(CAMERA_CMD.SET_DEVS_OSD, w, ctx, "auto");

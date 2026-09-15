@@ -41,6 +41,24 @@ describe("T8410 model-specific property ids", () => {
     expect(specs.get("aiDetectType")?.paramType).toBe(6045);
     expect(specs.get("aiDetectType")?.kind).toBe("enum");
     expect(specs.get("recordingQuality")?.paramType).toBe(2034);
+    expect(specs.get("watermark")?.enumValues).toEqual({
+      0: "Timestamp",
+      1: "Timestamp + Logo",
+      2: "Off",
+    });
+  });
+
+  it("keeps the T8425 watermark order separate from the T8410 order", () => {
+    const watermark = resolveDevice({
+      model: "T8425",
+      params: { 1214: "0" },
+    }).properties.find((property) => property.name === "watermark");
+
+    expect(watermark?.enumValues).toEqual({
+      0: "Off",
+      1: "Timestamp",
+      2: "Timestamp + Logo",
+    });
   });
 });
 
