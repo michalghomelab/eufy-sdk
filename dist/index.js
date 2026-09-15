@@ -24353,6 +24353,18 @@ var EufyMega = class extends EventEmitter9 {
    * frame family rather than the capability, so this facade stays capability-neutral like the layers
    * below it — see `CapabilityModule.actions`'s doc before adding another.
    */
+  /**
+   * DIAGNOSTIC — fire a raw P2P control-payload query (1700 wrapper `{commandType:param,data}`) and
+   * return whatever reply payload arrives keyed to the same `param`. Not a capability: several `CMD_GET_*`
+   * ids (motion, night vision, audio recording, …) never surface through the cloud param-list this SDK's
+   * property reads are built on, so this exists to find out — on real hardware — whether the device
+   * answers those ids over P2P at all, and in what shape, before any of them get a real capability member.
+   * Times out (default 15s) if nothing replies. Not part of the stable API — expect this to move once
+   * whatever it finds becomes a proper property.
+   */
+  debugP2pQuery(sn, param, data = {}, opts) {
+    return this.p2p.p2pControlQuery(sn, param, data, opts);
+  }
   ff09SettingsReaderFor(sn, ctx) {
     if (!ctx.adminUserId)
       return void 0;
