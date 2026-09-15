@@ -3291,6 +3291,13 @@ var MOTION_CMD = {
    */
   MOTION_DETECT_ENABLE: 6040,
   /**
+   * Pet-detection enable — its OWN command, not a bit of AI_DETECT_TYPE, for the plain indoor
+   * pan-tilt family. eufy-security-client's `setPetDetection` sends this unconditionally (no
+   * device-type gate at all), so unlike the human/vehicle/face type bitmask below, this one has a
+   * confirmed reference for T8410 specifically.
+   */
+  PET_DETECT_ENABLE: 6047,
+  /**
    * Motion sensitivity (app `SET_MOTION_DETECTION_SENSITIVITY_DOORBELL`, despite the name NOT
    * doorbell-specific — see below). ✅ Wire captured live on a T8170 ( 2026-07-23,
    * confirmed exchange), moving the sensitivity slider twice: `1350`
@@ -3573,6 +3580,28 @@ var MOTION_MEMBERS = {
       return setScalar(MOTION_CMD.CAMERA_PIR, asBool(v) ? 1 : 0, ctx, "direct-binary");
     },
     writeAs: "setDetection"
+  },
+  /**
+   * Pet detection — a separate toggle from `aiDetectType` on the plain indoor pan-tilt family
+   * (T8410/kin, deviceType 31/35). eufy-security-client's `setPetDetection` sends
+   * CMD_INDOOR_DET_SET_PET_ENABLE (6047) through the 1700 wrapper, unconditionally — the same
+   * confidence class as motionDetection/audioRecording's fixes, not a guess. Other device families
+   * keep whatever pet bit their own `aiDetectType` bitmask already carries; this only adds the
+   * T8410-specific wire, it does not touch that one.
+   */
+  petDetection: {
+    param: MOTION_CMD.PET_DETECT_ENABLE,
+    property: "petDetection",
+    type: "bool",
+    kind: "boolean",
+    provenance: "verified",
+    description: "Pet detection enable, plain indoor pan-tilt only (CMD_INDOOR_DET_SET_PET_ENABLE 6047).",
+    write: (v, ctx) => {
+      if (ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA && ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA_1080) {
+        throw new Error(`motion: petDetection write wire is only known for the plain indoor pan-tilt family [${describeDevice(ctx)}]`);
+      }
+      return setJson(MOTION_CMD.PET_DETECT_ENABLE, { enable: 0, index: 0, status: asBool(v) ? 1 : 0, type: 0, value: 0, voiceID: 0, zonecount: 0 }, ctx);
+    }
   },
   /**
    * First of the four raw sensitivity params, all `unexposed`: reported, so they stay in the schema and

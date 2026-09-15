@@ -24,6 +24,13 @@ export declare const MOTION_CMD: {
      */
     readonly MOTION_DETECT_ENABLE: 6040;
     /**
+     * Pet-detection enable — its OWN command, not a bit of AI_DETECT_TYPE, for the plain indoor
+     * pan-tilt family. eufy-security-client's `setPetDetection` sends this unconditionally (no
+     * device-type gate at all), so unlike the human/vehicle/face type bitmask below, this one has a
+     * confirmed reference for T8410 specifically.
+     */
+    readonly PET_DETECT_ENABLE: 6047;
+    /**
      * Motion sensitivity (app `SET_MOTION_DETECTION_SENSITIVITY_DOORBELL`, despite the name NOT
      * doorbell-specific — see below). ✅ Wire captured live on a T8170 ( 2026-07-23,
      * confirmed exchange), moving the sensitivity slider twice: `1350`
@@ -236,6 +243,23 @@ export declare const MOTION_MEMBERS: {
         readonly description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).";
         readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
         readonly writeAs: "setDetection";
+    };
+    /**
+     * Pet detection — a separate toggle from `aiDetectType` on the plain indoor pan-tilt family
+     * (T8410/kin, deviceType 31/35). eufy-security-client's `setPetDetection` sends
+     * CMD_INDOOR_DET_SET_PET_ENABLE (6047) through the 1700 wrapper, unconditionally — the same
+     * confidence class as motionDetection/audioRecording's fixes, not a guess. Other device families
+     * keep whatever pet bit their own `aiDetectType` bitmask already carries; this only adds the
+     * T8410-specific wire, it does not touch that one.
+     */
+    readonly petDetection: {
+        readonly param: 6047;
+        readonly property: "petDetection";
+        readonly type: "bool";
+        readonly kind: "boolean";
+        readonly provenance: "verified";
+        readonly description: "Pet detection enable, plain indoor pan-tilt only (CMD_INDOOR_DET_SET_PET_ENABLE 6047).";
+        readonly write: (v: string | number | boolean, ctx: CommandContext) => Command;
     };
     /**
      * First of the four raw sensitivity params, all `unexposed`: reported, so they stay in the schema and

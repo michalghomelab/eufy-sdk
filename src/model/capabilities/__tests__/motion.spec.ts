@@ -39,6 +39,7 @@ describe("motion capability module", () => {
     expect(MOTION.capability).toBe("motion");
     expect(MOTION.properties.map((p) => p.name)).toEqual([
       "motionDetection",
+      "petDetection",
       "motionSensitivity",
       "aiDetectType",
       "soloSensitivity",
@@ -111,6 +112,29 @@ describe("motion capability module", () => {
       // would be truthy-nonempty and wrong. The decode reads the field.
       expect(decodeRadarWdSwitch('{"radar_wd_switch":1,"other":9}')).toBe(true);
       expect(decodeRadarWdSwitch('{"radar_wd_switch":0}')).toBe(false);
+    });
+  });
+
+  describe("petDetection buildCommand — plain indoor pan-tilt only", () => {
+    const ptCtx = (deviceType: number): CommandContext => ({ ...ctx([], 3), deviceType });
+
+    it("emits a set-json 6047 frame on T8410/kin", () => {
+      expect(intent("petDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA))).toEqual({
+        kind: "set-json",
+        param: MOTION_CMD.PET_DETECT_ENABLE,
+        data: { enable: 0, index: 0, status: 1, type: 0, value: 0, voiceID: 0, zonecount: 0 },
+        channel: 3,
+      });
+      expect(intent("petDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA_1080))).toMatchObject({
+        param: MOTION_CMD.PET_DETECT_ENABLE,
+      });
+    });
+
+    it("refuses rather than guess a wire for any other device family", () => {
+      expect(() => intent("petDetection", true, ptCtx(DeviceType.INDOOR_PT_CAMERA_S350))).toThrow(
+        /petDetection write wire is only known for the plain indoor pan-tilt family/,
+      );
+      expect(() => intent("petDetection", true, ctx([], 3))).toThrow(/petDetection write wire is only known/);
     });
   });
 
