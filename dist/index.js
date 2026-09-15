@@ -4646,6 +4646,17 @@ var CAMERA_CMD = {
    */
   NIGHT_VISION_TYPE: 1277,
   /**
+   * IR-cut auto-switch — a genuinely SEPARATE toggle from NIGHT_VISION_TYPE above, confirmed by
+   * eufy-security-client's own property metadata (`DeviceAutoNightvisionProperty`, label "Auto
+   * Nightvision", type boolean, key CMD_IRCUT_SWITCH). When on, the camera decides IR vs colour
+   * by itself as light changes; NIGHT_VISION_TYPE's 0/1/2 is a manual override, and per that
+   * property's own doc, no "auto" value lives inside it. eufy-security-client's `else` branch —
+   * everything but WallLightCam and SoloCameraC210/Solar, which T8410/kin fall into — sends this
+   * via the plain int-string scalar wire (no envelope at all), the same class of send that
+   * already works reliably here (statusLed's DEV_LED_SWITCH).
+   */
+  IRCUT_SWITCH: 1013,
+  /**
    * Push-notification STYLE — how much a detection push carries: text alone, a thumbnail, or text
    * followed by a thumbnail. App `CMD_INDOOR_PUSH_NOTIFY_TYPE`, and the "indoor" is a misnomer: the
    * wire is confirmed on an OUTDOOR standalone camera (T8171). The app's id→name table carries TWO
@@ -4755,13 +4766,13 @@ var NightVision = {
   /** Off — never switch to night vision, stays in normal colour regardless of light. */
   Off: 0,
   /**
-   * Auto — the camera switches to black-and-white IR by itself as it gets dark, and back to
-   * colour in daylight. Old eufy client source names this raw state "B&W Night Vision"; the
-   * current app UI calls the same mode "Auto" (confirmed against the app directly, 2026-09-15 —
-   * this is the automatic-switching one, not a distinct fourth mode). `Infrared` kept as an
-   * alias since some call sites and this file's own history use that name for the same value.
+   * Manual black-and-white IR night vision. eufy-security-client's own property metadata names
+   * this raw state "B&W Night Vision" — three states total, confirmed, no fourth value hiding
+   * here. NOT what the app calls "Auto": that is a genuinely separate property, `autoNightVision`
+   * below (own command, CMD_IRCUT_SWITCH 1013) — confusing the two was this file's own mistake
+   * for one afternoon (2026-09-15), caught by testing `write` and finding the app didn't move.
    */
-  Auto: 1,
+  Infrared: 1,
   /** Full colour night vision, forced on even in the dark (models with a spotlight/starlight sensor). */
   FullColor: 2
 };
@@ -5008,10 +5019,30 @@ var CAMERA_MEMBERS = {
     kind: "enum",
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
     provenance: "verified",
-    description: 'Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. \u2705 wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. Enum labels are best-guess. Some models omit full colour. `form: "auto"` \u2014 the command was level-2-only before, which a standalone camera (no HomeBase) never gets a key for; the payload shape here already matches an own-session camera\'s own wire, just needed the level-1 door open.',
+    description: 'Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. \u2705 wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. Enum labels are best-guess. Some models omit full colour. Tried `form: "auto"` on a standalone T8410 (2026-09-15): the frame goes out over level 1 clean, no error \u2014 and the app doesn\'t move. Unlike motionDetection/audioRecording (a WRONG command entirely for this family, fixed by swapping to the 1700-wrapper one eufy-security-client actually uses), this command IS correct \u2014 level 2 is what it genuinely needs, and a standalone camera never gets that key. Left level-2- only (no `form`) on purpose: an honest bounded-~8s failure beats a silent no-op that looks like it worked. No 1700-wrapper alternative exists in eufy-security-client for this property.',
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
-      return nv == null ? void 0 : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
+      return nv == null ? void 0 : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
+    }
+  },
+  /**
+   * IR-cut auto-switch — what the app calls "Auto" in its night-vision picker, separate from the
+   * manual Off/B&W/Color choice above. Gated to the plain indoor pan-tilt family: that is
+   * eufy-security-client's own `else` branch for this command, and other families it names
+   * explicitly (WallLightCam, SoloCameraC210/Solar) use a different envelope this has not been
+   * checked against.
+   */
+  autoNightVision: {
+    param: CAMERA_CMD.IRCUT_SWITCH,
+    type: "bool",
+    kind: "boolean",
+    provenance: "verified",
+    description: `IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) \u2014 the app's "Auto" night-vision mode.`,
+    write: (v, ctx) => {
+      if (ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA && ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA_1080) {
+        throw new Error(`camera: autoNightVision write wire is only known for the plain indoor pan-tilt family [${describeDevice(ctx)}]`);
+      }
+      return setScalar(CAMERA_CMD.IRCUT_SWITCH, asBool(v) ? 1 : 0, ctx, "int-string");
     }
   },
   /**

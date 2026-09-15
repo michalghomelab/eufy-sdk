@@ -51,6 +51,7 @@ describe("camera capability module", () => {
       "soundDetectionType",
       "notificationStyle",
       "nightVision",
+      "autoNightVision",
       "streamingQuality",
       "recordingQuality",
       "antiTheftDetection",
@@ -278,7 +279,7 @@ describe("camera capability module", () => {
 
     it("nightVision → 1350 set-payload, mChannel 0, {channel,night_sion} (verified)", () => {
       // Verified live: device channel goes INSIDE the payload; the envelope's mChannel is 0.
-      expect(NightVision).toEqual({ Off: 0, Auto: 1, FullColor: 2 });
+      expect(NightVision).toEqual({ Off: 0, Infrared: 1, FullColor: 2 });
       expect(buildCommand("nightVision", NightVision.FullColor, ctx(3))).toMatchObject({
         kind: "set-payload",
         cmd: CAMERA_CMD.NIGHT_VISION_TYPE,
@@ -288,11 +289,22 @@ describe("camera capability module", () => {
       });
     });
 
-    it("nightVision writes with form auto (own-session cameras never get a level-2 key)", () => {
-      // Same command/payload as the test above — only the level routing changed. Was level-2-only,
-      // which stalled/never sent on a standalone camera; confirmed via motionDetection's identical
-      // bug class that a form fix, not a payload guess, is what these need.
-      expect(buildCommand("nightVision", NightVision.FullColor, ctx(3))).toMatchObject({ form: "auto" });
+    it("autoNightVision → 1013 int-string scalar, plain indoor pan-tilt only", () => {
+      // A genuinely separate property from nightVision — see its own doc. eufy-security-client's
+      // `else` branch (everything but WallLightCam/SoloCameraC210/Solar) for CMD_IRCUT_SWITCH.
+      const pt = ctx(3, { deviceType: DeviceType.INDOOR_PT_CAMERA });
+      expect(buildCommand("autoNightVision", true, pt)).toEqual({
+        kind: "set-param",
+        param: 1013,
+        value: 1,
+        form: "int-string",
+        channel: 3,
+      });
+      expect(buildCommand("autoNightVision", false, pt)).toMatchObject({ value: 0 });
+
+      expect(() => buildCommand("autoNightVision", true, ctx(3))).toThrow(
+        /autoNightVision write wire is only known for the plain indoor pan-tilt family/,
+      );
     });
 
     it("recordingQuality → 1350 set-payload (2731), raw tier or resolution NAME (verified T8425)", () => {
