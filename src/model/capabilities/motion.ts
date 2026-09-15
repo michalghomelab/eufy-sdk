@@ -4,6 +4,7 @@ import { describeDevice, setJson, setJsonRaw, setPayload, setScalar } from "./ac
 import { propertiesOf, type Members, type Surface, type MemberDeps } from "./members.js";
 import { DeviceType } from "../device-types.js";
 import type {
+  AvailabilityContext,
   CapabilityActions,
   CapabilityModule,
   CapabilityStateReader,
@@ -644,6 +645,10 @@ export const MOTION_MEMBERS = {
       "Whether a standalone motion sensor is in the app's user test mode — the only state in which it " +
       "reports detections over P2P. ✅ Observed live on a T8910 both ways. P2P-only: the cloud record " +
       "never carries this id, so it is present once the station has reported it and absent before that.",
+    // A camera may have the broad `motion` capability, but this setting belongs exclusively to a
+    // standalone PIR sensor. Gate the manifest as well as the command so HA never creates a dead
+    // "Test mode" switch for cameras such as T8410.
+    available: (ctx: AvailabilityContext) => ctx.codec === "sensor",
     write: (v, ctx) => {
       requireFamily("setTestMode", ctx, "sensor");
       return asBool(v)

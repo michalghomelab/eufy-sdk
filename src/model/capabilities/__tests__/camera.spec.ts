@@ -301,10 +301,11 @@ describe("camera capability module", () => {
         channel: 3,
       });
       expect(buildCommand("autoNightVision", false, pt)).toMatchObject({ value: 0 });
-
-      expect(() => buildCommand("autoNightVision", true, ctx(3))).toThrow(
-        /autoNightVision write wire is only known for the plain indoor pan-tilt family/,
-      );
+      // The same per-model gate owns both controls: T8410 gets its boolean 1013 switch and does not
+      // get the unrelated 1277 three-state selector; ordinary cameras get the reverse.
+      expect(buildCommand("nightVision", 1, pt)).toBeUndefined();
+      expect(buildCommand("autoNightVision", true, ctx(3))).toBeUndefined();
+      expect(buildCommand("nightVision", 1, ctx(3))).toMatchObject({ cmd: CAMERA_CMD.NIGHT_VISION_TYPE });
     });
 
     it("recordingQuality → 1350 set-payload (2731), raw tier or resolution NAME (verified T8425)", () => {
@@ -585,7 +586,7 @@ describe("camera capability module", () => {
       expect(sent[0]).toMatchObject({ param: CAMERA_CMD.SET_DEVS_OSD, value: 2 });
       expect(sent[1]).toMatchObject({ cmd: CAMERA_CMD.RECORDING_QUALITY_SET, payload: { quality: 3 } });
       await expect(acts.setWatermark(5)).rejects.toThrow("watermark: 5 is not a valid value (must be one of 0/1/2)");
-      await expect(acts.setNightVision(9)).rejects.toThrow(
+      await expect(acts.setNightVision!(9)).rejects.toThrow(
         "nightVision: 9 is not a valid value (must be one of 0/1/2)",
       );
       await expect(acts.setRecordingQuality(0)).rejects.toThrow(

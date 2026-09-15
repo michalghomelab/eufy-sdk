@@ -9,6 +9,7 @@ import {
 import type { MotionActions } from "../motion.js";
 
 import { DeviceType } from "../../device-types.js";
+import { Device } from "../../device.js";
 import type { CommandContext } from "../types.js";
 import type { Command } from "../../../core/contracts.js";
 import { buildActions, buildCommand } from "../index.js";
@@ -51,6 +52,22 @@ describe("motion capability module", () => {
       "humanOnlyAtNight",
       "loiteringDetection",
     ]);
+  });
+
+  it("does not publish the standalone sensor test mode on a camera", () => {
+    const camera = Device.fromRecord("T8410P0000000000", {
+      deviceType: DeviceType.INDOOR_PT_CAMERA,
+      model: "T8410",
+      params: {},
+    });
+    const sensor = Device.fromRecord("T8910P0000000000", {
+      deviceType: DeviceType.MOTION_SENSOR,
+      model: "T8910",
+      params: {},
+    });
+
+    expect(camera.properties.map((p) => p.name)).not.toContain("testMode");
+    expect(sensor.properties.map((p) => p.name)).toContain("testMode");
   });
 
   describe("detection sub-switches (1719 / 2706)", () => {
@@ -332,7 +349,7 @@ describe("motion — sensor test mode", () => {
 
   it("enters with the channel inside the payload, which is what the device requires", async () => {
     const { actions, sent } = bind("sensor");
-    await actions.setTestMode(true);
+    await actions.setTestMode!(true);
     expect(sent[0]).toMatchObject({
       kind: "set-payload",
       cmd: MOTION_CMD.SENSOR_ENTER_TEST_MODE,
@@ -342,7 +359,7 @@ describe("motion — sensor test mode", () => {
 
   it("leaves through the direct-binary shape, not the payload one", async () => {
     const { actions, sent } = bind("sensor");
-    await actions.setTestMode(false);
+    await actions.setTestMode!(false);
     expect(sent[0]).toMatchObject({
       kind: "set-param",
       param: MOTION_CMD.SENSOR_EXIT_TEST_MODE,
@@ -350,15 +367,9 @@ describe("motion — sensor test mode", () => {
     });
   });
 
-  /**
-   * A REJECTION, not a synchronous throw: `requireFamily` throws while building the command, and
-   * `bindMembers` converts that so every derived setter keeps one Promise contract — a caller chaining
-   * `.catch()` would miss a sync throw entirely.
-   */
-  it("refuses both on a camera — the pair exists only on sensors", async () => {
+  it("does not install the sensor-only setter on a camera", () => {
     const { actions } = bind("camera");
-    await expect(actions.setTestMode(true)).rejects.toThrow(/verified only on a sensor/);
-    await expect(actions.setTestMode(false)).rejects.toThrow(/verified only on a sensor/);
+    expect(actions.setTestMode).toBeUndefined();
   });
 });
 

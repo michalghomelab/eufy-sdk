@@ -4,7 +4,7 @@ import { isIndoorCamera, isIndoorCamMini, isIndoorPanTiltS350 } from "../device-
 import { setScalar, setPayload, setJson, hasCapability, describeDevice } from "./access.js";
 import { AUDIO_CMD } from "./audio.js";
 import { accepts, propertiesOf, provided, type Members, type Surface, type MemberDeps } from "./members.js";
-import type { CapabilityModule, CapabilityActions, CommandContext } from "./types.js";
+import type { AvailabilityContext, CapabilityModule, CapabilityActions, CommandContext } from "./types.js";
 import { CameraDisabledError, type Command, type MediaProvider } from "../../core/contracts.js";
 
 /**
@@ -219,6 +219,14 @@ export const NightVision = {
 } as const;
 /** A night-vision mode — the value side of {@link NightVision}. */
 export type NightVisionValue = (typeof NightVision)[keyof typeof NightVision];
+
+/**
+ * The original indoor pan/tilt family exposes only CMD_IRCUT_SWITCH (1013) as its night-vision
+ * control. eufy-security-client has kept that exact model table from 1.6.6 through 4.1.0: device
+ * types 31/35 get DeviceAutoNightvision, never the separate three-state DeviceNightvision property.
+ */
+const isPlainIndoorPanTilt = (ctx: AvailabilityContext): boolean =>
+  ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
 
 /**
  * Video record-quality names. The stored value is a quality TIER; the two lower tiers are the same
@@ -669,16 +677,21 @@ export const CAMERA_MEMBERS = {
     description:
       "Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. " +
       "✅ wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. " +
-      "Enum labels are best-guess. Some models omit full colour. Tried `form: \"auto\"` on a standalone " +
+      'Enum labels are best-guess. Some models omit full colour. Tried `form: "auto"` on a standalone ' +
       "T8410 (2026-09-15): the frame goes out over level 1 clean, no error — and the app doesn't move. " +
       "Unlike motionDetection/audioRecording (a WRONG command entirely for this family, fixed by " +
       "swapping to the 1700-wrapper one eufy-security-client actually uses), this command IS correct " +
       "— level 2 is what it genuinely needs, and a standalone camera never gets that key. Left level-2- " +
       "only (no `form`) on purpose: an honest bounded-~8s failure beats a silent no-op that looks like " +
       "it worked. No 1700-wrapper alternative exists in eufy-security-client for this property.",
+    // T8410/kin never had this property in eufy-security-client's per-model manifest. Publishing it
+    // there creates a dead three-state HA select beside the one control that family actually exposes.
+    available: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
-      return nv == null ? undefined : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
+      return nv == null
+        ? undefined
+        : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
     },
   },
   /**
@@ -693,7 +706,8 @@ export const CAMERA_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "verified",
-    description: "IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) — the app's \"Auto\" night-vision mode.",
+    description: 'IR-cut auto-switch (CMD_IRCUT_SWITCH 1013) — the app\'s "Auto" night-vision mode.',
+    available: isPlainIndoorPanTilt,
     write: (v, ctx) => {
       if (ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA && ctx.deviceType !== DeviceType.INDOOR_PT_CAMERA_1080) {
         throw new Error(
