@@ -1,6 +1,7 @@
 import { asBool } from "../../core/util.js";
 import { isHomeBase, HOMEBASE_TYPES } from "../device-family.js";
-import { setScalar, setPayload, isCameraCodec, hasCapability } from "./access.js";
+import { DeviceType } from "../device-types.js";
+import { setScalar, setPayload, setJson, isCameraCodec, hasCapability } from "./access.js";
 import { propertiesOf, type Members, type Surface } from "./members.js";
 import type { AvailabilityContext, CapabilityModule, CommandContext } from "./types.js";
 import type { Command } from "../../core/contracts.js";
@@ -29,6 +30,15 @@ export const AUDIO_CMD = {
    * `record_mute:1` = muted (recording OFF), `record_mute:0` = recording ON.
    */
   AUDIO_RECORDING: 1288,
+  /**
+   * Record-audio enable for the plain indoor pan-tilt family (T8410/kin, deviceType 31/35 — NOT
+   * S350/T8425, which take AUDIO_RECORDING/1288 above and are what that param's own doc names as
+   * verified). eufy-security-client's device-type branch for exactly this family
+   * (`isIndoorCamera() && !isIndoorPanAndTiltCameraS350()`, same split as motion detection's) sends
+   * this id through the 1700 control-payload wrapper — a different command entirely, not inverted
+   * record_mute on a 1350 envelope.
+   */
+  AUDIO_RECORDING_INDOOR_PT: 6012,
   /**
    * Doorbell ringtone/chime volume 0..100 (app `DOORBELL_RINGTONE_VOLUME`). ✅ Wire verified live on
    * T8214 — same direct-binary 136-byte struct, signCode 8. Doorbell-only: this capability adds it when
@@ -129,8 +139,16 @@ export const AUDIO_MEMBERS = {
       "Record audio with video (1288 record_mute, inverted). ✅ HW-verified on T8425: readback flips " +
       "(on→1288=0, off→1288=1). The write is a 1350 SET_PAYLOAD on the device channel with " +
       "`{channel, record_mute}` — the key is record_mute and it is INVERTED.",
-    write: (v, ctx) =>
-      setPayload(AUDIO_CMD.AUDIO_RECORDING, { channel: ctx.channel, record_mute: asBool(v) ? 0 : 1 }, ctx, 0),
+    write: (v, ctx) => {
+      if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
+        return setJson(
+          AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT,
+          { enable: asBool(v) ? 1 : 0, index: 0, status: 0, type: 0, value: 0, voiceID: 0, zonecount: 0 },
+          ctx,
+        );
+      }
+      return setPayload(AUDIO_CMD.AUDIO_RECORDING, { channel: ctx.channel, record_mute: asBool(v) ? 0 : 1 }, ctx, 0);
+    },
   },
   /**
    * Doorbell ring/chime loudness — WRITE-ONLY here on purpose. The READ property `ringtoneVolume` (1708)

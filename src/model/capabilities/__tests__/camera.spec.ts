@@ -288,6 +288,13 @@ describe("camera capability module", () => {
       });
     });
 
+    it("nightVision writes with form auto (own-session cameras never get a level-2 key)", () => {
+      // Same command/payload as the test above — only the level routing changed. Was level-2-only,
+      // which stalled/never sent on a standalone camera; confirmed via motionDetection's identical
+      // bug class that a form fix, not a payload guess, is what these need.
+      expect(buildCommand("nightVision", NightVision.FullColor, ctx(3))).toMatchObject({ form: "auto" });
+    });
+
     it("recordingQuality → 1350 set-payload (2731), raw tier or resolution NAME (verified T8425)", () => {
       // Raw tier value.
       expect(buildCommand("recordingQuality", 3, ctx(3))).toMatchObject({

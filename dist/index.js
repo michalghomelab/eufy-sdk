@@ -4444,6 +4444,15 @@ var AUDIO_CMD = {
    */
   AUDIO_RECORDING: 1288,
   /**
+   * Record-audio enable for the plain indoor pan-tilt family (T8410/kin, deviceType 31/35 — NOT
+   * S350/T8425, which take AUDIO_RECORDING/1288 above and are what that param's own doc names as
+   * verified). eufy-security-client's device-type branch for exactly this family
+   * (`isIndoorCamera() && !isIndoorPanAndTiltCameraS350()`, same split as motion detection's) sends
+   * this id through the 1700 control-payload wrapper — a different command entirely, not inverted
+   * record_mute on a 1350 envelope.
+   */
+  AUDIO_RECORDING_INDOOR_PT: 6012,
+  /**
    * Doorbell ringtone/chime volume 0..100 (app `DOORBELL_RINGTONE_VOLUME`). ✅ Wire verified live on
    * T8214 — same direct-binary 136-byte struct, signCode 8. Doorbell-only: this capability adds it when
    * the device is a doorbell.
@@ -4514,7 +4523,12 @@ var AUDIO_MEMBERS = {
     provenance: "verified",
     available: isCameraCodec,
     description: "Record audio with video (1288 record_mute, inverted). \u2705 HW-verified on T8425: readback flips (on\u21921288=0, off\u21921288=1). The write is a 1350 SET_PAYLOAD on the device channel with `{channel, record_mute}` \u2014 the key is record_mute and it is INVERTED.",
-    write: (v, ctx) => setPayload(AUDIO_CMD.AUDIO_RECORDING, { channel: ctx.channel, record_mute: asBool(v) ? 0 : 1 }, ctx, 0)
+    write: (v, ctx) => {
+      if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
+        return setJson(AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT, { enable: asBool(v) ? 1 : 0, index: 0, status: 0, type: 0, value: 0, voiceID: 0, zonecount: 0 }, ctx);
+      }
+      return setPayload(AUDIO_CMD.AUDIO_RECORDING, { channel: ctx.channel, record_mute: asBool(v) ? 0 : 1 }, ctx, 0);
+    }
   },
   /**
    * Doorbell ring/chime loudness — WRITE-ONLY here on purpose. The READ property `ringtoneVolume` (1708)
@@ -4959,10 +4973,10 @@ var CAMERA_MEMBERS = {
     kind: "enum",
     enumValues: { 0: "Off", 1: "Infrared", 2: "Full Color" },
     provenance: "verified",
-    description: "Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. \u2705 wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. Enum labels are best-guess. Some models omit full colour.",
+    description: 'Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. \u2705 wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. Enum labels are best-guess. Some models omit full colour. `form: "auto"` \u2014 the command was level-2-only before, which a standalone camera (no HomeBase) never gets a key for; the payload shape here already matches an own-session camera\'s own wire, just needed the level-1 door open.',
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
-      return nv == null ? void 0 : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
+      return nv == null ? void 0 : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
     }
   },
   /**

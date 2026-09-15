@@ -652,12 +652,14 @@ export const CAMERA_MEMBERS = {
     description:
       "Night-vision mode (NIGHT_VISION_TYPE 1277): 0 = off, 1 = infrared (B&W), 2 = full colour. " +
       "✅ wire verified live (T8425 ch3): 1350 SET_PAYLOAD, mChannel 0, {channel:N, night_sion:mode}. " +
-      "Enum labels are best-guess. Some models omit full colour.",
+      "Enum labels are best-guess. Some models omit full colour. `form: \"auto\"` — the command was " +
+      "level-2-only before, which a standalone camera (no HomeBase) never gets a key for; the payload " +
+      "shape here already matches an own-session camera's own wire, just needed the level-1 door open.",
     write: (v, ctx) => {
       const nv = coerceEnumValue(NightVision, v);
       return nv == null
         ? undefined
-        : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0);
+        : setPayload(CAMERA_CMD.NIGHT_VISION_TYPE, { channel: ctx.channel, night_sion: nv }, ctx, 0, 0, "auto");
     },
   },
   /**

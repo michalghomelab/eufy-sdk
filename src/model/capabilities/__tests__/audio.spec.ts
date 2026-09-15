@@ -85,6 +85,25 @@ describe("audio capability module", () => {
         (buildCommand("audioRecording", false, ctx(3)) as Extract<Command, { kind: "set-payload" }>).payload,
       ).toEqual({ channel: 3, record_mute: 1 });
     });
+    it("audioRecording → plain indoor pan-tilt (T8410/kin) takes 6012 via set-json, not the 1350 mute", () => {
+      // eufy-security-client's own device-type branch for this family sends
+      // CMD_INDOOR_SET_RECORD_AUDIO_ENABLE (6012) through the 1700 wrapper — same split as motion
+      // detection's, confirmed live to matter (CAMERA_PIR-class commands are silently dropped here).
+      const pt = ctx(3, { deviceType: DeviceType.INDOOR_PT_CAMERA });
+      expect(buildCommand("audioRecording", true, pt)).toEqual({
+        kind: "set-json",
+        param: AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT,
+        data: { enable: 1, index: 0, status: 0, type: 0, value: 0, voiceID: 0, zonecount: 0 },
+        channel: 3,
+      });
+      expect(buildCommand("audioRecording", false, pt)).toMatchObject({ data: { enable: 0 } });
+
+      const pt1080 = ctx(3, { deviceType: DeviceType.INDOOR_PT_CAMERA_1080 });
+      expect(buildCommand("audioRecording", true, pt1080)).toMatchObject({
+        kind: "set-json",
+        param: AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT,
+      });
+    });
     it("audioRecording property is inverted (raw 1288 = record_mute)", () => {
       const p = AUDIO.properties.find((x) => x.name === "audioRecording");
       expect(p?.paramType).toBe(AUDIO_CMD.AUDIO_RECORDING);

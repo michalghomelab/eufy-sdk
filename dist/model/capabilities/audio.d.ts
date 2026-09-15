@@ -28,6 +28,15 @@ export declare const AUDIO_CMD: {
      */
     readonly AUDIO_RECORDING: 1288;
     /**
+     * Record-audio enable for the plain indoor pan-tilt family (T8410/kin, deviceType 31/35 — NOT
+     * S350/T8425, which take AUDIO_RECORDING/1288 above and are what that param's own doc names as
+     * verified). eufy-security-client's device-type branch for exactly this family
+     * (`isIndoorCamera() && !isIndoorPanAndTiltCameraS350()`, same split as motion detection's) sends
+     * this id through the 1700 control-payload wrapper — a different command entirely, not inverted
+     * record_mute on a 1350 envelope.
+     */
+    readonly AUDIO_RECORDING_INDOOR_PT: 6012;
+    /**
      * Doorbell ringtone/chime volume 0..100 (app `DOORBELL_RINGTONE_VOLUME`). ✅ Wire verified live on
      * T8214 — same direct-binary 136-byte struct, signCode 8. Doorbell-only: this capability adds it when
      * the device is a doorbell.
