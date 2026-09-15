@@ -128,6 +128,10 @@ export const CAMERA_CMD = {
    * 2731 but 1705, on a domain of its own (5 = Auto, 6/7/8 = Low/Medium/High, all four observed).
    */
   RECORDING_QUALITY_SET: 2731,
+  /** Cloud property carrying the active recording tier on the original indoor pan/tilt family. */
+  RECORDING_QUALITY_INDOOR_PT_READ: 2034,
+  /** 1700 control-payload command used to set recording quality on that family. */
+  RECORDING_QUALITY_INDOOR_PT_SET: 1023,
   /**
    * LIVE-VIEW quality — a separate setting from {@link CAMERA_CMD.RECORDING_QUALITY_SET}, and the app's
    * names for the two invert what they suggest: 2730 is `multicamSetVideoQuailty` and drives the
@@ -754,6 +758,8 @@ export const CAMERA_MEMBERS = {
     param: CAMERA_CMD.RECORDING_QUALITY_SET,
     type: "string",
     provenance: "verified",
+    readAvailable: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: CAMERA_CMD.RECORDING_QUALITY_INDOOR_PT_READ, available: isPlainIndoorPanTilt }],
     decode: (raw) => decodeRecordingQualityTier(raw),
     decodedKind: "enum",
     decodedValues: Object.keys(RECORDING_QUALITY_TIERS).map(Number),
@@ -772,9 +778,11 @@ export const CAMERA_MEMBERS = {
     ...accepts<RecordingQualityName>(),
     write: (v, ctx) => {
       const q = resolveRecordingQualityTier(v);
-      return q == null
-        ? undefined
-        : setPayload(CAMERA_CMD.RECORDING_QUALITY_SET, { channel: 0, mode: 0, primary_view: 0, quality: q }, ctx, 0);
+      if (q == null) return undefined;
+      if (isPlainIndoorPanTilt(ctx)) {
+        return setJson(CAMERA_CMD.RECORDING_QUALITY_INDOOR_PT_SET, { quality: q }, ctx);
+      }
+      return setPayload(CAMERA_CMD.RECORDING_QUALITY_SET, { channel: 0, mode: 0, primary_view: 0, quality: q }, ctx, 0);
     },
   },
   /**
@@ -786,6 +794,7 @@ export const CAMERA_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
     description:
       "Anti-theft detection on/off (1015 APP_CMD_EAS_SWITCH; the app parses it as " +
       "anti_theft_detection_switch). Adaptive scalar {value:0|1}. ⚠️ Replay+readback confirmed on a " +

@@ -52,6 +52,10 @@ export const AUDIO_CMD = {
   HUB_PROMPT_VOLUME: 1292,
 } as const;
 
+/** The original indoor pan/tilt family reports audio-recording state under 6012, not 1288. */
+const isPlainIndoorPanTilt = (ctx: AvailabilityContext): boolean =>
+  ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
+
 /**
  * Bound audio controls — the object returned by `dev.audio()`.
  *
@@ -135,10 +139,11 @@ export const AUDIO_MEMBERS = {
     invert: true,
     provenance: "verified",
     available: isCameraCodec,
+    readAvailable: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: AUDIO_CMD.AUDIO_RECORDING_INDOOR_PT, invert: false, available: isPlainIndoorPanTilt }],
     description:
-      "Record audio with video (1288 record_mute, inverted). ✅ HW-verified on T8425: readback flips " +
-      "(on→1288=0, off→1288=1). The write is a 1350 SET_PAYLOAD on the device channel with " +
-      "`{channel, record_mute}` — the key is record_mute and it is INVERTED.",
+      "Record audio with video. Ordinary cameras use inverted 1288 record_mute; the original indoor " +
+      "pan/tilt family uses direct 6012 (eufy-security-client DeviceAudioRecordingIndoorSoloFloodlightProperty).",
     write: (v, ctx) => {
       if (ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080) {
         return setJson(

@@ -104,6 +104,8 @@ export const MOTION_CMD = {
    * T8124 (each write landed byte-exact + read back: 0x30003 → 0x8 → 0x3000b).
    */
   AI_DETECT_TYPE: 1298,
+  /** Indoor-camera detection-type mask (person=1, pet=2, all-other=4). */
+  INDOOR_MOTION_DETECT_TYPE: 6045,
   /**
    * Notification **snooze** — temporarily silence motion/detection notifications for N seconds. ✅ WIRE
    * CONFIRMED on a T8170 (2026-07-23,
@@ -164,6 +166,21 @@ export const MOTION_CMD = {
    */
   SOLO_SENSITIVITY: 6070,
 } as const;
+
+/** The original indoor pan/tilt family uses the 60xx control/read namespace. */
+const isPlainIndoorPanTilt = (ctx: AvailabilityContext): boolean =>
+  ctx.deviceType === DeviceType.INDOOR_PT_CAMERA || ctx.deviceType === DeviceType.INDOOR_PT_CAMERA_1080;
+
+/** Values published by eufy-security-client for DeviceMotionDetectionTypeIndoorProperty. */
+const INDOOR_MOTION_DETECTION_TYPES: Record<number, string> = {
+  1: "Person",
+  2: "Pet",
+  3: "Person and Pet",
+  4: "All other motions",
+  5: "Person and all other motions",
+  6: "Pet and all other motions",
+  7: "Person, Pet and all other motions",
+};
 
 /**
  * AI detection type bits — the `ai_detect_type` bitmask, decoded on-device and cross-checked against
@@ -487,7 +504,11 @@ export const MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "verified",
-    description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).",
+    readAvailable: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: MOTION_CMD.MOTION_DETECT_ENABLE, available: isPlainIndoorPanTilt }],
+    description:
+      "Motion/PIR detection enabled. Ordinary cameras report 1011; the original indoor pan/tilt " +
+      "family reports 6040 (eufy-security-client DeviceMotionDetectionIndoorSoloFloodProperty).",
     write: (v, ctx) => {
       requireFamily("motionDetection", ctx, "camera");
       // Plain indoor pan-tilt takes a structured 1700-wrapper frame, not the CAMERA_PIR scalar — see
@@ -550,25 +571,31 @@ export const MOTION_MEMBERS = {
       "MOTION_CMD.MOTION_SENSITIVITY). ✅ Write wire-confirmed live on T8170 (observed 1 and 7).",
   },
   /**
-   * 1298 holds the detailed AI-type BITMASK (live-observed: `0x30000` enabled-base | type bits, e.g. a
-   * T8425 reads `0x3000f`). Cams also report 1299 (`hbAiDetectType`) but that is a separate, simpler
-   * value (1) — NOT this bitmask, so 1298 is the read/write id.
+   * Detection type has two model-specific wires. Most supported cameras use the detailed 1298 bitmask;
+   * the original indoor pan/tilt family uses 6045 with a small 1..7 person/pet/other domain. The latter
+   * is the exact DeviceMotionDetectionTypeIndoorProperty table from eufy-security-client.
    */
   aiDetectType: {
     param: MOTION_CMD.AI_DETECT_TYPE,
     type: "number",
     kind: "bitfield",
     provenance: "verified",
+    readAvailable: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
+    readAliases: [{ paramType: MOTION_CMD.INDOOR_MOTION_DETECT_TYPE, available: isPlainIndoorPanTilt }],
+    enumValuesFor: (ctx: AvailabilityContext) =>
+      isPlainIndoorPanTilt(ctx) ? INDOOR_MOTION_DETECTION_TYPES : undefined,
     description:
-      "AI detection type bitmask — which classes trigger detection. ✅ Bits decoded live + confirmed " +
-      "vs the app: 0x30000 = enabled base, bit0 = human recognition, bit1 = human detection, bit2 = " +
-      "vehicle, bit3 = pet (see AiDetectType / encodeAiDetectType). ✅ WRITE HW-verified live on T8124 " +
-      "(1350 SET_PAYLOAD, {ai_detect_type, channel}): each write landed byte-exact + read back " +
-      "(0x30003 → 0x8 → 0x3000b).",
+      "Which classes trigger detection. Original indoor pan/tilt: 6045 enum/mask (person=1, pet=2, " +
+      "other motion=4). Other cameras: 1298 detailed AI bitmask (face=1, human=2, vehicle=4, pet=8, " +
+      "enabled base 0x30000).",
     write: (v, ctx) => {
       requireFamily("aiDetectType", ctx, "camera");
       const n = Number(v);
       if (!Number.isInteger(n) || n < 0) return undefined;
+      if (isPlainIndoorPanTilt(ctx)) {
+        if (n < 1 || n > 7) return undefined;
+        return setJson(MOTION_CMD.INDOOR_MOTION_DETECT_TYPE, { type: n }, ctx);
+      }
       return setPayload(MOTION_CMD.AI_DETECT_TYPE, { ai_detect_type: n, channel: ctx.channel }, ctx, 0, 0);
     },
   },
@@ -689,6 +716,7 @@ export const MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
     description:
       "Restrict AI classification to night-time only (1719). ⚠️ Replay + readback confirmed on a " +
       "HomeBase-attached T8425, not byte-captured.",
@@ -707,6 +735,7 @@ export const MOTION_MEMBERS = {
     type: "bool",
     kind: "boolean",
     provenance: "apk",
+    available: (ctx: AvailabilityContext) => !isPlainIndoorPanTilt(ctx),
     coerce: (raw) => decodeRadarWdSwitch(raw) ?? false,
     description:
       "Loitering detection — alert on lingering rather than passing (2706). Observed on the T8214 " +

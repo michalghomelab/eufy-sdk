@@ -189,6 +189,20 @@ describe("motion capability module", () => {
     });
   });
 
+  describe("detection type — plain indoor pan-tilt (T8410/kin)", () => {
+    it("uses the 6045 person/pet/other enum instead of the unrelated 1298 AI bitfield", () => {
+      const pt: CommandContext = { ...ctx([], 3), deviceType: DeviceType.INDOOR_PT_CAMERA };
+      expect(intent("aiDetectType", 3, pt)).toEqual({
+        kind: "set-json",
+        param: MOTION_CMD.INDOOR_MOTION_DETECT_TYPE,
+        data: { type: 3 },
+        channel: 3,
+      });
+      expect(() => intent("aiDetectType", 0, pt)).toThrow(/not a valid value/);
+      expect(() => intent("aiDetectType", 8, pt)).toThrow(/not a valid value/);
+    });
+  });
+
   describe("motionDetection buildCommand", () => {
     it("emits the direct-binary 1011 scalar (on=1/off=0) — the capture-verified watermark-class wire", () => {
       expect(intent("motionDetection", true, ctx([], 3))).toEqual({

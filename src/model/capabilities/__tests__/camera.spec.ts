@@ -326,6 +326,16 @@ describe("camera capability module", () => {
       expect(byName).toMatchObject({ cmd: CAMERA_CMD.RECORDING_QUALITY_SET, payload: { quality: 1 } });
     });
 
+    it("recordingQuality → T8410 uses the 1700 command 1023", () => {
+      const pt = ctx(3, { deviceType: DeviceType.INDOOR_PT_CAMERA });
+      expect(buildCommand("recordingQuality", 2, pt)).toEqual({
+        kind: "set-json",
+        param: CAMERA_CMD.RECORDING_QUALITY_INDOOR_PT_SET,
+        data: { quality: 2 },
+        channel: 3,
+      });
+    });
+
     it("streamingQuality is read-only: the write is unconfirmed, so no setter exists", () => {
       // Tier 0 is Auto, which recording has no equivalent for — the domains are not interchangeable.
       expect(STREAMING_QUALITY_TIERS[0]).toBe("Auto");

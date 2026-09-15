@@ -21,6 +21,29 @@ import { DeviceType } from "../device-types.js";
 // it by direct path, the same way the P2P command specs import `CAMERA_CMD`.
 import { VACUUM_DP } from "../capabilities/vacuum-clean.js";
 
+describe("T8410 model-specific property ids", () => {
+  it("reads the same 60xx/2034 properties as eufy-security-client", () => {
+    const dev = Device.fromRecord("T8410P0000000000", {
+      deviceType: DeviceType.INDOOR_PT_CAMERA,
+      model: "T8410",
+      params: { 6040: "1", 6012: "1", 6045: "3", 2034: "2", 1013: "1", 1240: "1", 1241: "1" },
+    });
+
+    expect(dev.getProperty("motionDetection")?.value).toBe(true);
+    expect(dev.getProperty("audioRecording")?.value).toBe(true);
+    expect(dev.getProperty("aiDetectType")?.value).toBe(3);
+    expect(dev.getProperty("recordingQuality")?.value).toBe("2");
+    expect(dev.getProperty("autoNightVision")?.value).toBe(true);
+
+    const specs = new Map(dev.properties.map((p) => [p.name, p]));
+    expect(specs.get("motionDetection")?.paramType).toBe(6040);
+    expect(specs.get("audioRecording")?.paramType).toBe(6012);
+    expect(specs.get("aiDetectType")?.paramType).toBe(6045);
+    expect(specs.get("aiDetectType")?.kind).toBe("enum");
+    expect(specs.get("recordingQuality")?.paramType).toBe(2034);
+  });
+});
+
 describe("classify (device_type → codec)", () => {
   it("maps known DeviceType numbers to their codec family", () => {
     expect(codecForType(18)).toBe("station"); // HB3
