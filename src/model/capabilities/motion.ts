@@ -472,7 +472,16 @@ export const MOTION_MEMBERS = {
     description: "Motion/PIR detection enabled (verified: param 1011 = CAMERA_PIR).",
     write: (v, ctx) => {
       requireFamily("motionDetection", ctx, "camera");
-      return setScalar(MOTION_CMD.CAMERA_PIR, asBool(v) ? 1 : 0, ctx, "direct-binary");
+      // UNDER TEST, not yet verified: was "direct-binary" (level-2/GCM only), which hard-stalled a
+      // standalone camera's whole session for up to 50s waiting on a key it never gets (fixed
+      // separately — resolveSession now bounds that to 8s regardless of form). "auto" additionally
+      // lets a standalone session actually SEND this on level 1 (int-string, the same wire every
+      // other working switch on such a camera already uses successfully) instead of only ever
+      // failing. Whether CAMERA_PIR's firmware handler accepts the value in that encoding is the
+      // open question — set param provenance/description once confirmed on real hardware; revert to
+      // "direct-binary" if a HomeBase-attached camera turns out to need it (own-session vs attached
+      // may need two different forms here, same as start-live media already does elsewhere).
+      return setScalar(MOTION_CMD.CAMERA_PIR, asBool(v) ? 1 : 0, ctx, "auto");
     },
     writeAs: "setDetection",
   },
